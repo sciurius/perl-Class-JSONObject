@@ -26,7 +26,7 @@ To install this module, run the following commands:
 # SUPPORT AND DOCUMENTATION
 
 Development of this module takes place on GitHub:
-https://github.com/sciurius//perl-Class-JSON_Object.
+https://github.com/sciurius/perl-Class-JSON_Object.
 
 You can find documentation for this module with the perldoc command.
 
@@ -38,7 +38,7 @@ GitHub.
 
 # COPYRIGHT AND LICENCE
 
-Copyright (C) 2024 Johan Vromans
+Copyright (C) 2024,2026 Johan Vromans
 
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.
