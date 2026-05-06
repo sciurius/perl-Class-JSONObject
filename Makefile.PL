@@ -15,7 +15,7 @@ my %makemaker =
 
 my %prereq =
   ( 'Test2::Suite'        => 0,
-    'Object::Pad'         => 0.78,
+    'Object::Pad'         => 0.814,
   );
 
 my %w =

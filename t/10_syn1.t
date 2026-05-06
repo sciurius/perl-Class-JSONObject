@@ -18,4 +18,10 @@ is( $op->json, '{"args":["a",2],"operation":"copy"}', "create" );
 $op->load('{"operation":"move","args":[2]}');
 is( $op->json, '{"args":[2],"operation":"move"}', "load" );
 
+$op = Action->create('{"operation":"move","args":[2]}');
+is( $op->json, '{"args":[2],"operation":"move"}', "load" );
+
+$op = Action->create_sparse('{"operation":"move","args":[2],"extra":1}');
+is( $op->json, '{"args":[2],"operation":"move"}', "load" );
+
 done_testing();

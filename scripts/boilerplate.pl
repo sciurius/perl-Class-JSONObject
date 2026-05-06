@@ -1,6 +1,8 @@
 #!/usr/bin/perl
 
 use v5.36;
+use Object::Pad;
+use Class::JSON_Object;
 use feature qw(signatures);
 no feature qw(indirect);
 use utf8;
@@ -8,8 +10,8 @@ use utf8;
 # Author          : Johan Vromans
 # Created On      : Thu Jan 25 19:14:38 2024
 # Last Modified By: 
-# Last Modified On: Thu Jan 25 22:30:37 2024
-# Update Count    : 54
+# Last Modified On: Fri Jan 26 14:12:43 2024
+# Update Count    : 123
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -60,8 +62,11 @@ if ( $outfile ) {
     open( STDOUT, '>:utf8', $outfile ) ||die("$outfile: $!\n");
 }
 
+my %classes;
+
 for my $file ( @ARGV ) {
     my $data = $json->decode( loadblob( $file ) );
+    my $prefix = $prefix;
 
     if ( $select ) {
 	my $p;
@@ -71,60 +76,110 @@ for my $file ( @ARGV ) {
 	}
 	$prefix //= ucfirst($p);
     }
-    print( "# WARNING: This is generated boiler plate code. Please adjust.\n\n",
-	   generate( $data, $prefix ) );
+    $prefix //= "Class";
+    generate( $data, $prefix );
 }
-$prefix //= "Class";
+
+print( "# WARNING: This is generated boiler plate code. Please adjust.\n\n" );
+
+for my $cls ( sort keys %classes ) {
+    my $class = $classes{$cls};
+    print( "class ", $class->name, " :does(Class::JSON_Object) {\n" );
+
+    # Length of excess field names.
+    my $len = 3 + 3*8;
+    $len = $class->lfn if $class->lfn > $len;
+    $len++;
+    my $fmt = "    field %-${len}s\t%s\n";
+
+    for my $fn ( sort { substr($a,1) cmp substr($b,1) } $class->fieldnames ) {
+	my $field = $class->get_field($fn);
+	my $xtra = "";
+	my $name = $field->name;
+	if ( $class->seen != $field->seen ) {
+	    $xtra .= " " if $xtra;
+	    $xtra .= ":Optional";
+	}
+	if ( $field->type ) {
+	    $xtra .= " " if $xtra;
+	    $xtra .= ":Class(" . $field->type . ")";
+	}
+
+	if ( $xtra ) {
+	    $xtra .= ";\t# ";
+	}
+	else {
+	    $name .= ";";
+	    $xtra = "# ";
+	}
+	printf( $fmt, $name, $xtra );
+    }
+
+    print( "}\n\n" );
+}
+
+
+################ Classes ################
+
+class Field :does(Class::JSON_Object) {
+    field $name			:param;	# includes sigil
+    field $type			:mutator; # if class
+    field $seen			:mutator;
+}
+
+class Class :does(Class::JSON_Object) {
+    field $name			:param;
+    field $lfn = -1;		# longest field name
+    field %fields;		# fields
+    field $seen			:mutator;
+
+    method add_field( $f ) {
+	$f = $fields{$f->name} //= $f;
+	$f->seen++;
+	$lfn = length($f->name) if length($f->name) > $lfn;
+    }
+
+    method fieldnames() { keys %fields }
+    method get_field( $name ) { $fields{$name} }
+}
 
 ################ Subroutines ################
 
 sub generate( $data, $pfx ) {
-    my $output = "class $pfx :does(Class::JSON_Object) {\n";
-    my $children = "";
 
-    # Length of excess field names.
-    my $len = 3 + 3*8;
-    for my $field ( keys %$data ) {
-	$len = length($field) if length($field) > $len;
-    }
-    $len++;
-    my $fmt = "%-${len}s\t%s";
+    my $class = $classes{$pfx} //= Class->new( name => $pfx );
+    $class->seen++;
 
     for my $field ( sort keys %$data ) {
+	my $f;
 	my $v = $data->{$field};
 
 	# ARRAY.
 	if ( ref($v) eq 'ARRAY' ) {
-	    $v = $v->[0];
-	    if ( ref($v) eq 'HASH' ) {
-		my $pfx = $pfx . "_" . $field;
-		$output .= "    field \@" .
-		  sprintf( $fmt, $field, ":Class($pfx);\n" );
-		$children .= generate( $v, $pfx );
-	    }
-	    else {
-		$output .= "    field \@" .
-		  sprintf($fmt, $field.";", "# \n" );
+	    $f = Field->new( name => "\@$field" );
+	    for ( my $i = 0; $i < @$v; $i++ ) {
+		my $v = $v->[$i];
+		if ( ref($v) eq 'HASH' ) {
+		    my $pfx = $pfx . "_" . $field;
+		    $f->type = $pfx;
+		    generate( $v, $pfx );
+		}
 	    }
 	}
 
 	# HASH -> Object.
 	elsif ( ref($v) eq 'HASH' ) {
 	    my $pfx = $pfx . "_" . $field;
-	    $output .= "    field \$" .
-	      sprintf( $fmt, $field, ":Class($pfx);\n" );
-	    $children .= generate( $v, $pfx );
+	    $f = Field->new( name => "\$$field", type => $pfx );
+	    generate( $v, $pfx );
 	}
 
 	# Scalar field.
 	else {
-	    $output .= "    field \$" .
-	      sprintf( $fmt, $field.";", "# \n" );
+	    $f = Field->new( name => "\$$field" );
 	}
+	$class->add_field($f);
     }
-
-    $output .= "}\n\n";
-    return $children . $output;
 
 }
 
@@ -241,7 +296,7 @@ The input file(s) to process. These must be valid JSON data files.
 
 =head1 DESCRIPTION
 
-B<This program> will read the given input file and produce boiler
+This program will read the given input file and produce boiler
 plate code for Class::JSON_Object classes.
 
 =head1 EXAMPLE

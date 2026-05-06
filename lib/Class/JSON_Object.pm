@@ -1,6 +1,7 @@
 #! perl
 
 use v5.26;
+use warnings; # see https://metacpan.org/pod/Object::Pad#Implied-Pragmata
 use Object::Pad qw( :experimental(mop) :experimental(custom_field_attr) );
 use utf8;
 
@@ -19,6 +20,7 @@ Class::JSON_Object - Role for Class::JSON_Object
 
     # Create instance and load from JSON.
     my $op = Action->new->load('{"operation":"move","arg":42}');
+    my $op = Action->create('{"operation":"move","arg":42}');
 
     # Accessors are automatically provided.
     say "Operation = ", $op->operation;
@@ -72,7 +74,7 @@ role Class::JSON_Object;
 
 use Object::Pad::MetaFunctions qw( deconstruct_object ref_field );
 
-our $VERSION = "0.01";
+our $VERSION = "0.02";
 use Carp;
 
 field $_json;			# JSON en/decoder
@@ -94,6 +96,30 @@ ADJUST {
 
 sub import {
     $^H{"JSON_Object/Extra"}++;
+}
+
+################ Convenience ################
+
+=head2 create( $data )
+=head2 create_sparse( $data )
+
+Creates the object and loads from the given data.
+
+The data may be a hash or a JSON string.
+
+The sparse variant allows the data to contain fields that are not
+defined as part of the class.
+
+Returns the object for convenience.
+
+=cut
+
+method create :common ($data) {
+    $class->new->load($data);
+}
+
+method create_sparse :common ($data) {
+    $class->new->load_sparse($data);
 }
 
 ################ Loading/Unloading ################
@@ -154,15 +180,7 @@ method _descr() {
     return %_descr;
 }
 
-=head2 load( $data )
-
-Loads the object from the given data.
-
-The data may be a hash or a JSON string.
-
-=cut
-
-method load( $data ) {
+method _load_data( $data, $sparse ) {
     my %descr = $self->_descr;
     $data = $self->json2perl($data) unless ref($data) eq 'HASH';
     croak("Data for ", __CLASS__, " must be HASH" ) unless ref($data) eq 'HASH';
@@ -222,13 +240,34 @@ method load( $data ) {
 	}
     }
 
-    if ( %k ) {
+    if ( !$sparse && %k ) {
 	# Got values that we do not have fields for.
 	carp( __CLASS__ . ": Excess keys: \"",
 	      join( "\", \"", sort keys %k ), "\"" );
     }
 
     $self;
+}
+
+=head2 load( $data )
+=head2 load_sparse( $data )
+
+Loads the object from the given data.
+
+The data may be a hash or a JSON string.
+
+The sparse variant allows the data to contain fields that are not
+defined as part of the class.
+
+Returns the object for convenience.
+
+=cut
+
+method load( $data ) {
+    $self->_load_data( $data, 0 );
+}
+method load_sparse( $data ) {
+    $self->_load_data( $data, 1 );
 }
 
 =head2 hash()
